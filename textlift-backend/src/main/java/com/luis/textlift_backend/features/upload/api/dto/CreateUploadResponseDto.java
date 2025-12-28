@@ -8,7 +8,7 @@ import java.util.UUID;
 
 public record CreateUploadResponseDto(
         @NotNull
-        UploadMode enumType,
+        UploadMode uploadMode,
 
         //Set if we need to start a new upload (cache-miss)
         UUID uploadId,

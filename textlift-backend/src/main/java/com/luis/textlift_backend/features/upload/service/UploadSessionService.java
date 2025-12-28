@@ -21,6 +21,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -49,7 +50,22 @@ public class UploadSessionService {
         if(cacheDocId.isPresent()){
             return new CreateUploadResponseDto(UploadMode.CACHE_HIT,null,null,cacheDocId.get());
         }
+
+
 */
+
+        Optional<UploadSession> existingUpload =
+                uploadRepo.findFirstByHashAndUploadStatusIn(req.hash(),
+                        List.of(UploadStatus.PENDING, UploadStatus.UPLOADING));
+
+        if (existingUpload.isPresent()) {
+            return new CreateUploadResponseDto(
+                    UploadMode.CACHE_HIT_WAIT,
+                    existingUpload.get().getId(),
+                    existingUpload.get().getUploadStatus(),
+                    null
+            );
+        }
         //Else, we want to verify whether the hash exist in the DB at all (processed, but not in cache)
         Optional<Document> existing = documentRepo.findByHash(req.hash());
         if(existing.isPresent()){
