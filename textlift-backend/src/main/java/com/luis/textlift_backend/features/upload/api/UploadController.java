@@ -19,7 +19,7 @@ public class UploadController {
     }
 
     //First, upload file metadata to start an upload stream
-    @PostMapping("/")
+    @PostMapping("")
     public ResponseEntity<CreateUploadResponseDto> uploadMetadata(@Valid @RequestBody CreateUploadDto req)
     {
         //Will either return upload ID for a new upload or return a document ID which can
@@ -52,4 +52,5 @@ public class UploadController {
         StatusResponseDto response = this.uploadService.pollUploadStatus(uploadId);
         return ResponseEntity.status(200).body(response);
     }
+
 }

@@ -1,10 +1,15 @@
 package com.luis.textlift_backend.features.document.service;
 
+import com.luis.textlift_backend.features.auth.domain.User;
+import com.luis.textlift_backend.features.auth.repository.UserRepository;
+import com.luis.textlift_backend.features.document.api.dto.GetUserUploadsResponseDto;
 import com.luis.textlift_backend.features.document.domain.Document;
 import com.luis.textlift_backend.features.document.domain.DocumentStatus;
 import com.luis.textlift_backend.features.document.domain.ExtractedMetadata;
 import com.luis.textlift_backend.features.document.repository.DocumentRepository;
 import com.luis.textlift_backend.features.document.service.events.DocumentReadyForIdEvent;
+import com.luis.textlift_backend.features.upload.domain.UploadSession;
+import com.luis.textlift_backend.features.upload.repository.UploadSessionRepository;
 import jakarta.transaction.Transactional;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.io.RandomAccessReadBufferedFile;
@@ -13,26 +18,35 @@ import org.apache.pdfbox.pdmodel.PDDocumentInformation;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
 public class DocumentService {
     private final DocumentRepository documentRepository;
     private final ApplicationEventPublisher events;
-    public DocumentService(DocumentRepository documentRepository, ApplicationEventPublisher events) {
+    private final UserRepository userRepository;
+    private final UploadSessionRepository uploadSessionRepository;
+
+    public DocumentService(DocumentRepository documentRepository, ApplicationEventPublisher events, UserRepository userRepository, UploadSessionRepository uploadSessionRepository) {
         this.documentRepository = documentRepository;
         this.events = events;
+        this.userRepository = userRepository;
+        this.uploadSessionRepository = uploadSessionRepository;
     }
 
 
@@ -109,5 +123,55 @@ public class DocumentService {
             //After writing text to file, we want to delete the PDF file since we don't need it anymore
             Files.delete(oldFile);
         }
+    }
+
+    public List<GetUserUploadsResponseDto> getUserUploadedDocuments(){
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String email = auth.getName();
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Could not find user!!!"
+                        ));
+
+        Optional<List<String>> hashes = uploadSessionRepository.findHashByUserId(user.getId());
+        if(hashes.isEmpty()){
+            return List.of();
+        }
+
+        //After getting the hashes of the files associted with the user, now we need to get the actual documents
+        List<Document> documents = new ArrayList<>();
+        for(String hash : hashes.get()){
+            List<Document> currHashDocs = documentRepository.getDocumentsByHash(hash);
+            if(!(currHashDocs.isEmpty())){
+                documents.addAll(currHashDocs);
+            }
+        }
+        System.out.println("DOCUMENTS:");
+        System.out.println(documents);
+        //After we have all documents, we want to build our list of GetUserUploadResponseDtos
+
+        List<GetUserUploadsResponseDto> responseDtos = new ArrayList<>();
+
+        for (Document doc : documents) {
+            try {
+                var tb = doc.getTextbook();
+                if (tb == null) {
+                    System.out.println("Document " + doc.getId() + " has NULL textbook");
+                    responseDtos.add(new GetUserUploadsResponseDto("UNKNOWN", DocumentStatus.FAILED_TO_IDENTIFY_ISBN, doc.getId()));
+                }else{
+                    responseDtos.add(new GetUserUploadsResponseDto(tb.getTextbookName(), doc.getStatus(), doc.getId()));
+                }
+            } catch (Exception e) {
+                System.out.println("Failed building DTO for docId=" + doc.getId());
+                e.printStackTrace();
+            }
+        }
+
+        System.out.println("RESPONSE DTOS: " + responseDtos);
+        return responseDtos;
+
     }
 }
