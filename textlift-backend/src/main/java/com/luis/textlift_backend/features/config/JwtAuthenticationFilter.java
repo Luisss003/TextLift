@@ -44,13 +44,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         //First, we want to read the HTTP header
         final String authHeader = request.getHeader("Authorization");
 
-        //If no auth header or the token doesnt start with Bearer, simply skip auth and do something else
+        //If no auth header or the token starts with Bearer, simply skip auth and do something else
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        //First extract the token then find the user by their email/username
+        //First extract the token, then find the user by their email/username
         try {
             final String jwt = authHeader.substring(7);
             final String userEmail = jwtService.extractUsername(jwt);
@@ -58,7 +58,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             //Check if the security context is already authenticated
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
-            //If we cant find the user AND they are not authenticated, we want to load the user from the DB
+            //If we can't find the user AND they are not authenticated, we want to load the user from the DB
             if (userEmail != null && authentication == null) {
                 UserDetails userDetails = this.userDetailsService.loadUserByUsername(userEmail);
 
@@ -71,14 +71,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                             userDetails.getAuthorities()
                     );
 
-                    //Attach optional request details like IP, or sesision if any
+                    //Attach optional request details like IP, or session if any
                     authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                     //And then store this obj into the security context
                     SecurityContextHolder.getContext().setAuthentication(authToken);
                 }
             }
 
-            //Continue chain
+            //Continue a chain
             filterChain.doFilter(request, response);
         } catch (Exception exception) {
             handlerExceptionResolver.resolveException(request, response, null, exception);

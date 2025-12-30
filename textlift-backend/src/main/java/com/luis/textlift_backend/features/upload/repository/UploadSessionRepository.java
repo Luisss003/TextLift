@@ -15,4 +15,8 @@ public interface UploadSessionRepository extends JpaRepository<UploadSession, UU
 
     @Query("select us.hash from UploadSession us where us.user.id = :userId")
     Optional<List<String>> findHashByUserId(UUID userId);
-}
+
+    //Ensures that users can only finalize/upload file/or check the status of an upload if they own the upload session
+    Optional<UploadSession> findByIdAndUser_Id(UUID id, UUID userId);
+
+    boolean existsByUser_IdAndHash(UUID userId, String hash);}

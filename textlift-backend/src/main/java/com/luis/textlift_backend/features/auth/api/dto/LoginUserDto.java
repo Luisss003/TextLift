@@ -3,10 +3,9 @@ package com.luis.textlift_backend.features.auth.api.dto;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 
-public record LoginUserDto (
-        @NotBlank @Email
-        String email,
+import javax.validation.constraints.Size;
 
-        @NotBlank
-        String password
+public record LoginUserDto (
+        @NotBlank @Email String email,
+        @NotBlank @Size(min=6) String password
 ){}

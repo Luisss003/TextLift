@@ -1,5 +1,6 @@
 package com.luis.textlift_backend.features.auth.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonManagedReference;
 import com.luis.textlift_backend.features.upload.domain.UploadSession;
 import jakarta.persistence.*;
@@ -33,6 +34,7 @@ public class User implements UserDetails {
     private String fullName;
 
     @Column(nullable = false)
+    @JsonIgnore
     private String password;
 
     @Column

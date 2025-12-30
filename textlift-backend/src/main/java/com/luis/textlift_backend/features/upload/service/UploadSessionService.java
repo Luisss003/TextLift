@@ -46,18 +46,11 @@ public class UploadSessionService {
 
     public CreateUploadResponseDto createUpload(CreateUploadDto req){
         //Check business rules
-        if(req.sizeBytes() > 500000000){
+        if(req.sizeBytes() > 250000000){
             throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "File is too large...");
         }
-/*
-        //Check cache to see if we've processed this file recently
-        Optional<UUID> cacheDocId = hashCache.getDocumentId(req.hash());
-        if(cacheDocId.isPresent()){
-            return new CreateUploadResponseDto(UploadMode.CACHE_HIT,null,null,cacheDocId.get());
-        }
 
 
-*/
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         String email = auth.getName();
         User user = userRepository.findByEmail(email)
@@ -79,13 +72,13 @@ public class UploadSessionService {
                     null
             );
         }
-        //Else, we want to verify whether the hash exist in the DB at all (processed, but not in cache)
+        //Else, we want to verify whether the hash exists in the DB at all (processed, but not in cache)
         Optional<Document> existing = documentRepo.findByHash(req.hash());
         if(existing.isPresent()){
             if(existing.get().getStatus() == DocumentStatus.ANNOTATIONS_READY){
                 return new CreateUploadResponseDto(UploadMode.CACHE_HIT,null,null,existing.get().getId());
             }
-            //Otherwise, we are in the proecss of generating the annotations, so ask the user to try again later
+            //Otherwise, we are in the process of generating the annotations, so ask the user to try again later
             else if(existing.get().getStatus() == DocumentStatus.ANNOTATIONS_GENERATING){
                 return new CreateUploadResponseDto(UploadMode.CACHE_HIT_WAIT, null, null, null);
             }
@@ -104,13 +97,12 @@ public class UploadSessionService {
     }
 
     public UploadResponseDto uploadFile(UUID uploadId, MultipartFile file){
-        //First, load session via ID
-        UploadSession session = uploadRepo.findById(uploadId)
-                .orElseThrow(() ->
-                        new ResponseStatusException(
-                                HttpStatus.NOT_FOUND,
-                                "Could not find upload session!!!"
-                        ));
+        User user = currentUser();
+        System.out.println("The current user is " + user.getFullName());
+        //We want to load the upload session as long as the current request is by the user that owns it
+        UploadSession session = uploadRepo.findByIdAndUser_Id(uploadId, user.getId())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Upload session not found"));
+
         if(session.getUploadStatus() != UploadStatus.PENDING){
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Upload session has expired!!!");
         }
@@ -128,7 +120,18 @@ public class UploadSessionService {
             Path partPath = dir.resolve(uploadId + ".pdf.part");
 
             try(InputStream in = file.getInputStream()){
-                long bytes = Files.copy(in, partPath, StandardCopyOption.REPLACE_EXISTING);
+                if(file.isEmpty()){
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "File is empty!!!");
+                }
+                if(file.getSize() > 25L * 1024 * 1024){
+                    throw new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "File is too large...");
+                }
+
+                Files.copy(in, partPath, StandardCopyOption.REPLACE_EXISTING);
+
+                //Validate a file type
+                validatePdf(partPath);
+
                 Files.move(partPath, finalPath,
                         StandardCopyOption.REPLACE_EXISTING,
                         StandardCopyOption.ATOMIC_MOVE);
@@ -158,16 +161,19 @@ public class UploadSessionService {
 
     @Transactional
     public UploadFinalizeResponseDto finalizeUpload(UUID uploadId){
-        //First, confirm that file was completely uploaded
-        UploadSession session = uploadRepo.findById(uploadId)
-                .orElseThrow(() ->
-                        new ResponseStatusException(
-                                HttpStatus.NOT_FOUND,
-                                "Could not find upload session!!!"
-                        ));
+        User user = currentUser();
+
+        UploadSession session = uploadRepo.findByIdAndUser_Id(uploadId, user.getId())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Upload session not found"));
 
         if(session.getUploadStatus() != UploadStatus.UPLOADED){
             throw new ResponseStatusException(HttpStatus.CONFLICT, "File was not fully UPLOADED!!!");
+        }
+
+        //Do additional check to dedupe.
+        Optional<Document> existing = documentRepo.findByHash(session.getHash());
+        if (existing.isPresent()) {
+            return new UploadFinalizeResponseDto(existing.get().getId(), existing.get().getStatus());
         }
 
         //Next, generate an empty document and store the file path
@@ -176,7 +182,6 @@ public class UploadSessionService {
         document.setFilePath("/tmp/textlift/uploads/" + uploadId + ".pdf");
         document.setOriginalFileName(session.getOriginalFileName());
         document.setHash(session.getHash());
-
         documentRepo.save(document);
 
         //Publish finalization event so that async processor can begin extracting data immediately
@@ -186,12 +191,30 @@ public class UploadSessionService {
     }
 
     public StatusResponseDto pollUploadStatus(UUID uploadId){
-        UploadSession uploadSession = uploadRepo.findById(uploadId)
-                .orElseThrow(() ->
-                        new ResponseStatusException(
-                                HttpStatus.NOT_FOUND,
-                                "Could not find upload session!!!"
-                        ));
-        return new StatusResponseDto(uploadSession.getUploadStatus());
+        User user = currentUser();
+
+        UploadSession session = uploadRepo.findByIdAndUser_Id(uploadId, user.getId())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Upload session not found"));
+            return new StatusResponseDto(session.getUploadStatus());
+    }
+
+    private User currentUser(){
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        return userRepository.findByEmail(auth.getName())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found!!"));
+    }
+
+    //Checks magic bytes to validate file type
+    private void validatePdf(Path partPath) {
+        try (InputStream s = Files.newInputStream(partPath)) {
+            byte[] head = s.readNBytes(5);
+            boolean isPdf = head.length == 5
+                    && head[0] == '%' && head[1] == 'P' && head[2] == 'D' && head[3] == 'F' && head[4] == '-';
+            if (!isPdf){
+                throw new ResponseStatusException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "Not a PDF");
+            }
+        } catch (IOException e) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to validate upload", e);
+        }
     }
 }

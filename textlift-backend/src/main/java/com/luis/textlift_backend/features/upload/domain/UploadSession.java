@@ -49,8 +49,10 @@ public class UploadSession {
     public void setHash(String md5) {
         this.hash = md5;
     }
-
     public void setUser(User user) {
         this.user = user;
+    }
+    public User getUser() {
+        return user;
     }
 }
