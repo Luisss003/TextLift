@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { Button } from "../components/ui/Button";
-import { clearToken } from "../auth/token";
+import { clearSession } from "../auth/token";
 import { isLoggedIn } from "../auth/requireAuth";
 
 // Nav item with dark theme styles
@@ -25,8 +25,8 @@ function NavItem({ to, label }: { to: string; label: string }) {
 
 export function Navbar() {
   const handleLogout = () => {
-    clearToken();
-    window.location.href = "/login";
+    clearSession();
+    window.location.href = "/";
     alert("You have been logged out.");
   };
 

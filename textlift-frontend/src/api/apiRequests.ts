@@ -1,7 +1,6 @@
 import {http} from "./http";
-import { clearToken, setToken } from "../auth/token";
-import type { Doc } from "zod/v4/core";
 import type { DocumentPreview } from "../components/DocumentPreview";
+import { clearSession, setSession } from "../auth/token";
 
 //Login
 export type LoginRequest = {
@@ -15,8 +14,8 @@ type LoginResponse = {
 };
 
 export async function login(data: LoginRequest): Promise<LoginResponse> {
-    const res = await http.post<LoginResponse>("/auth/login", data);
-    setToken(res.data.token);
+    const res = await http.post<LoginResponse>("/api/v1/auth/login", data);
+    setSession(res.data.token, res.data.expiresIn);
     return res.data;
 }
 
@@ -28,8 +27,8 @@ export type SignupRequest = {
 }
 
 export async function signup(data: SignupRequest): Promise<void> {
-    clearToken();
-    await http.post("/auth/signup", data);
+    clearSession();
+    await http.post("/api/v1/auth/signup", data);
 }
 
 //Upload Requests/Responses

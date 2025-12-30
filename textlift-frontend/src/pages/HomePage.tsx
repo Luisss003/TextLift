@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom";
+import { Navbar } from "../layout/Navbar";
 
 export function HomePage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
+      <Navbar />
       <main className="mx-auto max-w-5xl px-4 py-10">
         <section className="rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-sm">
           <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">

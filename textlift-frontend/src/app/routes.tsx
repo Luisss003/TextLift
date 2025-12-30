@@ -13,6 +13,10 @@ import UploadedDocumentsPage from "../pages/UploadedDocumentsPage";
 export const router = createBrowserRouter([
     //Public Routes
     {
+        path: "/",
+        element: <HomePage />,
+    },
+    {
         path: "/login",
         element: <LoginPage />,
     },
@@ -28,7 +32,6 @@ export const router = createBrowserRouter([
         loader: requireAuth,
         element: <AppShell />,
         children: [
-            {index: true, element: <HomePage />},
             {path: "documents", element: <UploadedDocumentsPage />},
             {path: "upload", element: <UploadPage />},
             {path: "annotations/document/:documentId", element: <AnnotationDetailsPage />},

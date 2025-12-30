@@ -1,16 +1,17 @@
 import { redirect } from "react-router-dom";
-import { getToken } from "../auth/token";
+import { isSessionValid, clearSession } from "../auth/token";
 
 export function requireAuth() {
-    const token = getToken();
-    if (!token) {
-        alert("You must be logged in to access this page.");
+    //If user attemps to access a protected route without a valid session, 
+    // log them out, and redirect to login
+    if (!isSessionValid()) {
+        clearSession();
         return redirect("/login");
     }
     return null;
 }
 
 export function isLoggedIn(): boolean {
-    return getToken() !== null;
+    return isSessionValid();
 }
 
