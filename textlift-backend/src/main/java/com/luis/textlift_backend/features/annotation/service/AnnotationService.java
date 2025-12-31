@@ -1,21 +1,25 @@
 package com.luis.textlift_backend.features.annotation.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.luis.textlift_backend.features.annotation.domain.Annotation;
 import com.luis.textlift_backend.features.annotation.domain.AnnotationNote;
 import com.luis.textlift_backend.features.annotation.repository.AnnotationNoteRepository;
 import com.luis.textlift_backend.features.annotation.repository.AnnotationRepository;
 import com.luis.textlift_backend.features.annotation.api.dto.AnnotationFetchResponseDto;
+import com.luis.textlift_backend.features.auth.domain.User;
+import com.luis.textlift_backend.features.auth.repository.UserRepository;
 import com.luis.textlift_backend.features.document.domain.Document;
 import com.luis.textlift_backend.features.document.domain.DocumentStatus;
 import com.luis.textlift_backend.features.document.repository.DocumentRepository;
 import com.luis.textlift_backend.features.textbook.domain.Textbook;
 import com.luis.textlift_backend.features.textbook.repository.TextbookRepository;
+import com.luis.textlift_backend.features.upload.repository.UploadSessionRepository;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.converter.StructuredOutputConverter;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -36,17 +40,23 @@ public class AnnotationService {
     private final TextbookRepository textbookRepository;
     private final AnnotationRepository annotationRepository;
     private final AnnotationNoteRepository annotationNoteRepository;
+    private final UserRepository userRepository;
+    private final UploadSessionRepository uploadSessionRepository;
     private record aiResponse(String note, String reason, String quote, String location) {}
 
 
     public AnnotationService(ChatClient.Builder chatClientBuilder, DocumentRepository documentRepository,
                              TextbookRepository textbookRepository, AnnotationRepository annotationRepository,
-                             AnnotationNoteRepository annotationNoteRepository) {
+                             AnnotationNoteRepository annotationNoteRepository,
+                             UserRepository userRepository,
+                             UploadSessionRepository uploadSessionRepository) {
         this.chatClient = chatClientBuilder.build();
         this.documentRepository = documentRepository;
         this.textbookRepository = textbookRepository;
         this.annotationRepository = annotationRepository;
         this.annotationNoteRepository = annotationNoteRepository;
+        this.userRepository = userRepository;
+        this.uploadSessionRepository = uploadSessionRepository;
     }
 
     public void generateAnnotations(UUID textbookId, UUID documentId) {
@@ -68,7 +78,7 @@ public class AnnotationService {
         //We want to split the textbook into individual chunks with enough context such that
         //AI does not take a long time to generate annotations
         try (BufferedReader reader = new BufferedReader(new FileReader(documentObj.getFilePath()))) {
-            int targetChars = 100 * 1024;
+            int targetChars = 12 * 1024;
             List<aiResponse> all = new ArrayList<>();
             StringBuilder sb = new StringBuilder(targetChars + 2048);
 
@@ -127,6 +137,15 @@ public class AnnotationService {
         }
     }
 
+    public void deleteExtractedText(UUID documentId) {
+        documentRepository.findById(documentId).ifPresent(doc -> {
+            String path = doc.getFilePath();
+            if (path != null && !path.isBlank()) {
+                try { Files.deleteIfExists(Path.of(path)); } catch (IOException ignored) {}
+            }
+        });
+    }
+
     public AnnotationFetchResponseDto getNotesByDocId(UUID docId) {
         //Fetch annotation which is parent of annotation notes
         Document document = documentRepository.findById(docId)
@@ -135,8 +154,20 @@ public class AnnotationService {
                                 HttpStatus.NOT_FOUND,
                                 "Could not find document associated with this ID..."
                         ));
+        ensureUserOwnsUploadForDocument(document);
         //Assumption that this is only ever called if the document has been fully processed
         return new AnnotationFetchResponseDto(document.getTextbook().getAnnotation().getNotes());
+    }
+
+    private void ensureUserOwnsUploadForDocument(Document document) {
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        User user = userRepository.findByEmail(auth.getName())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
+
+        String hash = document.getHash();
+        if (hash == null || !uploadSessionRepository.existsByUser_IdAndHash(user.getId(), hash)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have access to this document");
+        }
     }
 
     private String buildPrompt(String chunk) {

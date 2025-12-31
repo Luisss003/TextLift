@@ -23,6 +23,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.Array;
@@ -96,23 +97,29 @@ public class DocumentService {
         return new ExtractedMetadata(pdd.getAuthor(), pdd.getTitle(), pdd.getSubject(), pdd.getKeywords());
     }
 
-    //Returns filepath of where text was written
+    // Returns filepath of where text was written
     public String extractText(PDDocument pdf, UUID documentId, String oldFilePath) throws IOException {
-        //Extract text from PDF
-        PDFTextStripper pdfStripper = new PDFTextStripper();
-        String text = pdfStripper.getText(pdf);
-
-        //Write to a temp file
+        //New file path where PDF text persists
         Path newFile = Paths.get("/tmp/textlift/uploads/" + documentId + ".txt");
+        // Path of a PDF file (deleted after extraction)
         Path oldFile = Paths.get(oldFilePath);
-        try (pdf) {
-            Files.writeString(newFile, text, StandardCharsets.UTF_8);
 
-            //return a new filepath for update in caller
+        // Extract text from PDF
+        PDFTextStripper stripper = new PDFTextStripper();
+        int totalPages = pdf.getNumberOfPages();
+        int window = 20;
+
+        // Buffer and write 20 pages at a time into a text file to reduce memory usage
+        try (BufferedWriter writer = Files.newBufferedWriter(newFile, StandardCharsets.UTF_8)) {
+            for (int start = 1; start <= totalPages; start += window) {
+                int end = Math.min(start + window - 1, totalPages);
+                stripper.setStartPage(start);
+                stripper.setEndPage(end);
+                String chunk = stripper.getText(pdf);
+                writer.write(chunk);
+            }
             return newFile.toString();
-
-        }
-        catch (IOException e) {
+        } catch (IOException e) {
             throw new ResponseStatusException(
                     HttpStatus.INTERNAL_SERVER_ERROR,
                     "Unable to extract text from file",
@@ -121,7 +128,7 @@ public class DocumentService {
         }
         finally {
             //After writing text to file, we want to delete the PDF file since we don't need it anymore
-            Files.delete(oldFile);
+            Files.deleteIfExists(oldFile);
         }
     }
 

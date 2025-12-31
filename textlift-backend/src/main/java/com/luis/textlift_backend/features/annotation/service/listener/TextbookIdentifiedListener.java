@@ -18,5 +18,6 @@ public class TextbookIdentifiedListener {
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onIdentified(TextbookIdentifiedEvent event){
         annotationService.generateAnnotations(event.textbookId(), event.documentId());
+        annotationService.deleteExtractedText(event.documentId());
     }
 }

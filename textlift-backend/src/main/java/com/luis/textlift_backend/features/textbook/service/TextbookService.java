@@ -3,12 +3,9 @@ package com.luis.textlift_backend.features.textbook.service;
 import com.luis.textlift_backend.features.document.domain.Document;
 import com.luis.textlift_backend.features.document.domain.DocumentStatus;
 import com.luis.textlift_backend.features.document.repository.DocumentRepository;
-import com.luis.textlift_backend.features.textbook.api.dto.GoogleApiResponseDto;
-import com.luis.textlift_backend.features.textbook.api.dto.TextbookLookupDto;
 import com.luis.textlift_backend.features.textbook.domain.Textbook;
 import com.luis.textlift_backend.features.textbook.repository.TextbookRepository;
 import com.luis.textlift_backend.features.textbook.service.events.TextbookIdentifiedEvent;
-import io.jsonwebtoken.lang.Arrays;
 import jakarta.transaction.Transactional;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
@@ -43,26 +40,13 @@ public class TextbookService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Document not found"));
 
 
-        //Extract ISBN (fail fast if you want “must-have ISBN”)
-        String isbn13 = loadFrontMatterText(documentObj)
-                .flatMap(IsbnExtractor::extractBestIsbn13)
-                .orElseThrow(() -> {
-                    documentObj.setStatus(DocumentStatus.FAILED_TO_IDENTIFY_ISBN);
-                    return new ResponseStatusException(
-                        HttpStatus.UNPROCESSABLE_ENTITY,
-                        "No valid ISBN-13 found in document text"
-                    );
-                });
+        // Extract ISBN, fall back to placeholder textbook if missing
+        Optional<String> frontText = loadFrontMatterText(documentObj);
+        Optional<String> isbn13 = frontText.flatMap(IsbnExtractor::extractBestIsbn13);
+        Textbook textbook = resolveOrCreateTextbook(isbn13);
 
-        // 2) Find-or-create textbook by ISBN (dedupe key)
-        Textbook textbook = textbookRepository.findByIsbn(isbn13)
-                .orElseGet(() -> {
-                    Textbook created = new Textbook();
-                    created.setIsbn(isbn13);
-                    return textbookRepository.save(created);
-                });
 
-        // 3) Link doc -> textbook + status
+        // Link the document to the textbook
         if (documentObj.getTextbook() == null || !documentObj.getTextbook().getId().equals(textbook.getId())) {
             documentObj.setTextbook(textbook);
         }
@@ -71,12 +55,14 @@ public class TextbookService {
         }
         documentRepository.save(documentObj); // optional; doc is managed in txn
 
-        //Next, given the textbook, we want to call Google Books API if the metadata fields (title, authors, edition)
+        // Given the textbook (new or from DB)
+        // we want to call Google Books API if the metadata fields (title, authors, edition)
         // are blank since that implies we haven't processed this before
-        if(textbook.getTextbookName() == null || textbook.getTextbookName().isBlank()
+        if(isbn13.isPresent()
+                && (textbook.getTextbookName() == null || textbook.getTextbookName().isBlank()
                 || textbook.getEdition() == null || textbook.getEdition().isBlank()
-                || textbook.getAuthors() == null || textbook.getAuthors().isEmpty()){
-            googleBooksApi.searchByIsbn(isbn13).ifPresent(dto -> {
+                || textbook.getAuthors() == null || textbook.getAuthors().isEmpty())){
+            googleBooksApi.searchByIsbn(isbn13.get()).ifPresent(dto -> {
                 if (isBlank(textbook.getTextbookName()) && !isBlank(dto.title())) {
                     textbook.setTextbookName(dto.title());
                 }
@@ -93,6 +79,22 @@ public class TextbookService {
         if(textbook.getAnnotation() == null){
             events.publishEvent(new TextbookIdentifiedEvent(textbook.getId(), documentObj.getId()));
         }
+    }
+
+    private Textbook resolveOrCreateTextbook(Optional<String> isbn13) {
+        if (isbn13.isPresent()) {
+            return textbookRepository.findByIsbn(isbn13.get())
+                    .orElseGet(() -> {
+                        Textbook created = new Textbook();
+                        created.setIsbn(isbn13.get());
+                        return textbookRepository.save(created);
+                    });
+        }
+
+        Textbook placeholder = new Textbook();
+        placeholder.setIsbn("UNKNOWN_ISBN_" + UUID.randomUUID());
+        placeholder.setTextbookName("UNKNOWN_TEXTBOOK");
+        return textbookRepository.save(placeholder);
     }
 
     private Optional<String> loadFrontMatterText(Document doc) {
