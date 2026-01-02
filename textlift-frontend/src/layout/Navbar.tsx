@@ -1,7 +1,8 @@
 import { NavLink } from "react-router-dom";
 import { Button } from "../components/ui/Button";
-import { clearSession } from "../auth/token";
 import { isLoggedIn } from "../auth/requireAuth";
+import { logout } from "../api/apiRequests";
+import { clearSession } from "../auth/token";
 
 // Nav item with dark theme styles
 function NavItem({ to, label }: { to: string; label: string }) {
@@ -24,10 +25,17 @@ function NavItem({ to, label }: { to: string; label: string }) {
 }
 
 export function Navbar() {
-  const handleLogout = () => {
-    clearSession();
-    window.location.href = "/";
-    alert("You have been logged out.");
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (e) {
+      // Even if logout fails, still clear client state
+      console.error("Logout failed", e);
+    } finally {
+      clearSession();
+      window.location.href = "/";
+      alert("You have been logged out.");
+    }
   };
 
   return (

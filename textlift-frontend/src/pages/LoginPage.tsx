@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useForm, type SubmitHandler } from "react-hook-form";
 import type { LoginRequest } from "../api/apiRequests";
 import { login } from "../api/apiRequests";
+import { setSession } from "../auth/token";
 import { useNavigate, NavLink } from "react-router-dom";
 import { Button } from "../components/ui/Button";
 import { Navbar } from "../layout/Navbar";
@@ -38,6 +39,7 @@ export function LoginPage() {
     setServerError(null);
     try {
       await login(data);
+      setSession();
       // no alert — just route
       navigate("/", { replace: true });
     } catch (err) {

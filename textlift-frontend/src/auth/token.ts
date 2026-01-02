@@ -1,28 +1,19 @@
-const TOKEN_KEY= "textlift_token";
-const EXP_KEY = "textlift_token_exp";
+const SESSION_KEY = "session_active";
 
-export function getToken(): string | null {
-    return localStorage.getItem(TOKEN_KEY);
+export function getToken(): null {
+  // JWT is stored as an HttpOnly cookie; not readable from JS
+  return null;
 }
 
-export function getTokenExp():number | null{
-    const v = localStorage.getItem(EXP_KEY);
-    return v ? Number(v) : null;
+export function setSession(): void {
+  // Track login state locally so the UI can render correctly
+  localStorage.setItem(SESSION_KEY, "1");
 }
 
-export function setSession(token: string, expiresInMS: number): void{
-    localStorage.setItem(TOKEN_KEY, token);
-    localStorage.setItem(EXP_KEY, (Date.now() + expiresInMS).toString());
+export function isSessionValid(): boolean {
+  return localStorage.getItem(SESSION_KEY) === "1";
 }
 
 export function clearSession(): void {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(EXP_KEY);
-}
-
-export function isSessionValid(skewMs = 30_000): boolean {
-  const t = getToken();
-  const exp = getTokenExp();
-  if (!t || !exp) return false;
-  return Date.now() + skewMs < exp; // treat near-expiry as expired
+  localStorage.removeItem(SESSION_KEY);
 }

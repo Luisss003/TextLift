@@ -1,3 +1,4 @@
+import axios from "axios";
 import { useState } from "react";
 import { createUpload, uploadFile, finalizeUpload } from "../api/apiRequests";
 import type { CreateUploadResponse } from "../api/apiRequests";
@@ -24,18 +25,37 @@ export default function FileUploader({ onResult }: FileUploaderProps) {
   const [file, setFile] = useState<File | null>(null);
   const [uploadStatus, setUploadStatus] = useState<string>("");
   const [uploadMode, setUploadMode] = useState<string>("");
+  const [error, setError] = useState<string | null>(null);
+
+  const MAX_SIZE_BYTES = 50 * 1024 * 1024;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
     setFile(f);
+    setError(null);
+    setUploadStatus("");
+    setUploadMode("");
   };
 
   const handleFileUpload = async () => {
     if (!file) return;
 
+    if (file.size > MAX_SIZE_BYTES) {
+      setError("File exceeds the 50MB limit.");
+      setUploadStatus("FAILED");
+      return;
+    }
+
+    if (file.type && file.type !== "application/pdf") {
+      setError("Only PDF uploads are allowed.");
+      setUploadStatus("FAILED");
+      return;
+    }
+
     setUploadMode("");
     setUploadStatus("PENDING");
+    setError(null);
 
     const hash = await generateFilehash(file);
 
@@ -68,6 +88,7 @@ export default function FileUploader({ onResult }: FileUploaderProps) {
       onResult?.({ mode: "NEW_UPLOAD", uploadId: res.uploadId });
     } catch (e) {
       setUploadStatus("FAILED");
+      setError(extractProblemDetail(e));
       console.error("Upload failed", e);
     }
   };
@@ -147,6 +168,12 @@ export default function FileUploader({ onResult }: FileUploaderProps) {
 
       {/* Status */}
       <div className="mt-4 space-y-2">
+        {error && (
+          <div className="rounded-xl border border-rose-900/60 bg-rose-950/30 p-4 text-sm text-rose-200">
+            {error}
+          </div>
+        )}
+
         {uploadStatus === "PENDING" && (
           <div className="rounded-xl border border-slate-800 bg-slate-950 p-4 text-sm text-slate-200">
             Preparing upload…
@@ -173,10 +200,21 @@ export default function FileUploader({ onResult }: FileUploaderProps) {
 
         {uploadStatus === "FAILED" && (
           <div className="rounded-xl border border-rose-900/60 bg-rose-950/30 p-4 text-sm text-rose-200">
-            Upload failed. Please try again.
+            {error ?? "Upload failed. Please try again."}
           </div>
         )}
       </div>
     </div>
   );
+}
+
+function extractProblemDetail(err: unknown): string {
+  if (axios.isAxiosError(err) && err.response?.data) {
+    const detail =
+      (err.response.data as any).detail ||
+      (err.response.data as any).description ||
+      (typeof err.response.data === "string" ? err.response.data : null);
+    if (detail) return detail;
+  }
+  return "Upload failed. Please try again.";
 }

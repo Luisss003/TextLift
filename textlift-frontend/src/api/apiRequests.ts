@@ -1,6 +1,5 @@
 import {http} from "./http";
 import type { DocumentPreview } from "../components/DocumentPreview";
-import { clearSession, setSession } from "../auth/token";
 
 //Login
 export type LoginRequest = {
@@ -8,15 +7,8 @@ export type LoginRequest = {
     password: string;
 };
 
-type LoginResponse = {
-    token: string;
-    expiresIn: number;
-};
-
-export async function login(data: LoginRequest): Promise<LoginResponse> {
-    const res = await http.post<LoginResponse>("/api/v1/auth/login", data);
-    setSession(res.data.token, res.data.expiresIn);
-    return res.data;
+export async function login(data: LoginRequest): Promise<void> {
+    await http.post("/api/v1/auth/login", data);
 }
 
 //Signup
@@ -27,7 +19,6 @@ export type SignupRequest = {
 }
 
 export async function signup(data: SignupRequest): Promise<void> {
-    clearSession();
     await http.post("/api/v1/auth/signup", data);
 }
 
@@ -79,4 +70,8 @@ export async function getUserUploads(): Promise<DocumentPreview[]> {
 export async function getAnnotationByDocumentId(id: string): Promise<JSON> {
     const res = await http.get<JSON>(`/api/v1/annotation/document/${id}`);
     return res.data;
+}
+
+export async function logout(): Promise<void> {
+    await http.post("/api/v1/auth/logout");
 }
