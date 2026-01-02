@@ -1,9 +1,7 @@
-import React from 'react'
 import { LoadingState } from './components/states/LoadingState'
 import { EmptyState } from './components/states/EmptyState'
 import { ErrorState } from './components/states/ErrorState'
 import './App.css'
-import { Navbar } from './layout/Navbar'
 import { AppShell } from './layout/AppShell'
 
 function App() {

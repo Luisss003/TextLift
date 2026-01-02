@@ -5,7 +5,6 @@ import { UploadPage } from "../pages/UploadPage";
 import { LoginPage } from "../pages/LoginPage";
 import { RegisterPage } from "../pages/RegisterPage";
 import { requireAuth } from "../auth/requireAuth";
-import DocumentPreview from "../components/DocumentPreview";
 import AnnotationDetailsPage from "../pages/AnnotationDetailsPage";
 import UploadedDocumentsPage from "../pages/UploadedDocumentsPage";
 

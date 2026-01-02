@@ -5,7 +5,6 @@ import type { LoginRequest } from "../api/apiRequests";
 import { login } from "../api/apiRequests";
 import { setSession } from "../auth/token";
 import { useNavigate, NavLink } from "react-router-dom";
-import { Button } from "../components/ui/Button";
 import { Navbar } from "../layout/Navbar";
 
 // Catch Axios errors
