@@ -1,9 +1,7 @@
 package com.luis.textlift_backend.features.config.ratelimit;
 
 import com.github.benmanes.caffeine.cache.LoadingCache;
-import io.github.bucket4j.Bandwidth;
 import io.github.bucket4j.Bucket;
-import io.github.bucket4j.Refill;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -12,9 +10,6 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.time.Duration;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class RateLimitingFilter extends OncePerRequestFilter {
     private final LoadingCache<String, Bucket> buckets;
@@ -26,9 +21,7 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException,IOException {
-        //Rather than just storing IP addresses indefinitely, we can use Caffeine to
-        //cache them, allowing for more dynamic rate limiting.
-
+        // Use the direct remote address to avoid header spoofing
         String key = clientKey(request);
         Bucket bucket = buckets.get(key);
         if(bucket.tryConsume(1)){
@@ -41,10 +34,7 @@ public class RateLimitingFilter extends OncePerRequestFilter {
     }
 
     private String clientKey(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For"); //X-forward-for first IP or remote Addr
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
+        // Avoid trusting X-Forwarded-For directly; rely on container/proxy config instead
         return request.getRemoteAddr();
     }
 

@@ -19,7 +19,7 @@ import java.util.function.Function;
 public class JwtService {
     @Value("${JWT_SECRET}")
     private String secretKey;
-    @Value("36000000")
+    @Value("3600000")
     private Long jwtExpiration;
 
     //extract username from JWT
@@ -62,6 +62,10 @@ public class JwtService {
     public boolean isTokenValid(String token, UserDetails userDetails) {
         final String username = extractUsername(token);
         return (username.equals(userDetails.getUsername())) && !isTokenExpired(token);
+    }
+
+    public Date extractExpirationDate(String token) {
+        return extractExpiration(token);
     }
 
     private boolean isTokenExpired(String token) {
