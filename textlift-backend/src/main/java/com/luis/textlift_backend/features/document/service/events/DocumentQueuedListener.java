@@ -21,14 +21,12 @@ public class DocumentQueuedListener {
     @Async("pipeLineExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onQueued(DocumentQueuedEvent event){
-        System.out.println("LISTENER FIRED: " + event.documentId());
         documentService.processDocument(event.documentId());
     }
 
     @Async("pipeLineExecutor")
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onReadyToId(DocumentReadyForIdEvent event){
-        System.out.println("LISTENER FIRED: " + event.documentId());
         textbookService.identifyTextbook(event.documentId());
     }
 }
