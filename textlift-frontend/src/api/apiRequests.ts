@@ -56,6 +56,10 @@ export async function uploadFile(uploadId: string, file: File): Promise<void> {
     });
 }
 
+export async function deleteFile(documentId: string): Promise<void> {
+    await http.delete(`/api/v1/documents/uploads/${documentId}`)
+}
+
 export async function finalizeUpload(uploadId: string): Promise<FinalizeUploadResponse> {
     const res = await http.post(`/api/v1/upload/${uploadId}/finalize`);
     return res.data;

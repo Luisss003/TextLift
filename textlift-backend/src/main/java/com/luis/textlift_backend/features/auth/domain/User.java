@@ -123,6 +123,14 @@ public class User implements UserDetails {
     public void setRole(Role role) {
         this.role = role;
     }
+
+    public List<UploadSession> getUploadSessions() {
+        return uploadSessions;
+    }
+
+    public void setUploadSessions(List<UploadSession> uploadSessions) {
+        this.uploadSessions = uploadSessions;
+    }
 }
 
 

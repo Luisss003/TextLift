@@ -24,9 +24,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.BufferedWriter;
-import java.io.File;
 import java.io.IOException;
-import java.lang.reflect.Array;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -172,8 +170,33 @@ public class DocumentService {
             }
         }
 
-        System.out.println("RESPONSE DTOS: " + responseDtos);
         return responseDtos;
+
+    }
+
+    @Transactional
+    public void deleteUserDocument(UUID documentId){
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        String email = auth.getName();
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Could not find user!!!"
+                        ));
+
+        Document document = documentRepository.findById(documentId)
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Could not find document!!!"
+                        ));
+
+        String hash = document.getHash();
+        long deleted = uploadSessionRepository.deleteByUser_IdAndHash(user.getId(), hash);
+        if (deleted == 0) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Upload session not found");
+        }
 
     }
 }

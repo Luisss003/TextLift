@@ -21,8 +21,15 @@ public interface UploadSessionRepository extends JpaRepository<UploadSession, UU
 
     boolean existsByUser_IdAndHash(UUID userId, String hash);
 
+    void deleteById(UUID id);
+
+    long deleteByUser_IdAndHash(UUID userId, String hash);
+
     Optional<UploadSession> findFirstByUser_IdAndHashAndUploadStatusIn(
             UUID userId,
             String hash,
             List<UploadStatus> statuses
-    );}
+    );
+
+
+}

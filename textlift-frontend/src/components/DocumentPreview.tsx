@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { getUserUploads } from "../api/apiRequests";
+import { useEffect, useState, type MouseEvent } from "react";
+import { getUserUploads, deleteFile } from "../api/apiRequests";
 import { useNavigate } from "react-router-dom";
 
 export type DocumentPreview = {
@@ -39,6 +39,7 @@ export default function DocumentPreview() {
   const [docPreviews, setDocPreviews] = useState<DocumentPreview[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const navigate = useNavigate();
 
@@ -64,6 +65,25 @@ export default function DocumentPreview() {
       cancelled = true;
     };
   }, []);
+
+  const handleDelete = async (
+    event: MouseEvent<HTMLButtonElement>,
+    documentId: string,
+  ) => {
+    event.stopPropagation();
+
+    try {
+      setDeletingId(documentId);
+      await deleteFile(documentId);
+      setDocPreviews((prev) =>
+        prev.filter((doc) => doc.documentId !== documentId),
+      );
+    } catch {
+      setError("Failed to delete document.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   if (loading) {
     return <div className="text-sm text-slate-400">Loading documents…</div>;
@@ -91,10 +111,17 @@ export default function DocumentPreview() {
   return (
     <div className="space-y-3">
       {docPreviews.map((doc) => (
-        <button
+        <div
           key={doc.documentId}
-          type="button"
           onClick={() => navigate(`/annotations/document/${doc.documentId}`)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              navigate(`/annotations/document/${doc.documentId}`);
+            }
+          }}
           className="group w-full rounded-2xl border border-slate-800 bg-slate-950 p-5 text-left shadow-sm transition hover:bg-slate-900 active:scale-[0.99]"
         >
           <div className="flex items-start justify-between gap-4">
@@ -104,6 +131,16 @@ export default function DocumentPreview() {
                   {doc.textBookTitle}
                 </h2>
                 <StatusPill status={doc.documentStatus} />
+                {doc.documentStatus === "ANNOTATIONS_READY" && (
+                  <button
+                    type="button"
+                    className="rounded-lg border border-red-800 bg-red-950 px-3 py-1 text-xs font-semibold text-red-200 transition hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={(event) => handleDelete(event, doc.documentId)}
+                    disabled={deletingId === doc.documentId}
+                  >
+                    {deletingId === doc.documentId ? "Deleting…" : "Delete"}
+                  </button>
+                )}
               </div>
 
               <p className="mt-2 text-xs text-slate-500">
@@ -112,10 +149,10 @@ export default function DocumentPreview() {
             </div>
 
             <span className="shrink-0 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-200 transition group-hover:border-slate-700 group-hover:bg-slate-900">
-              Open →
+              Open
             </span>
           </div>
-        </button>
+        </div>
       ))}
     </div>
   );
