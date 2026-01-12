@@ -1,5 +1,6 @@
 package com.luis.textlift_backend.features.annotation.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.luis.textlift_backend.features.annotation.domain.Annotation;
 import com.luis.textlift_backend.features.annotation.domain.AnnotationNote;
@@ -15,13 +16,13 @@ import com.luis.textlift_backend.features.textbook.domain.Textbook;
 import com.luis.textlift_backend.features.textbook.repository.TextbookRepository;
 import com.luis.textlift_backend.features.upload.repository.UploadSessionRepository;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.converter.StructuredOutputConverter;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
@@ -35,6 +36,7 @@ import java.util.UUID;
 
 @Service
 public class AnnotationService {
+    private static final Logger LOG = LoggerFactory.getLogger(AnnotationService.class);
     private final ChatClient chatClient;
     private final DocumentRepository documentRepository;
     private final TextbookRepository textbookRepository;
@@ -91,11 +93,11 @@ public class AnnotationService {
                 if (sb.length() + line.length() + 1 > targetChars && !sb.isEmpty()) {
                     String chunk = sb.toString();
                     sb.setLength(0);
-                    var typeRef = new ParameterizedTypeReference<List<aiResponse>>() {};
-                    List<aiResponse> chunkNotes = this.chatClient.prompt()
+                    String raw = this.chatClient.prompt()
                             .user(buildPrompt(chunk))
                             .call()
-                            .entity(typeRef);
+                            .content();
+                    List<aiResponse> chunkNotes = parseAiResponse(raw);
 
                     if (chunkNotes != null) all.addAll(chunkNotes);
                 }
@@ -106,11 +108,11 @@ public class AnnotationService {
 
             // flush remainder AFTER EOF
             if (!sb.isEmpty()) {
-                var typeRef = new ParameterizedTypeReference<List<aiResponse>>() {};
-                List<aiResponse> chunkNotes = this.chatClient.prompt()
+                String raw = this.chatClient.prompt()
                         .user(buildPrompt(sb.toString()))
                         .call()
-                        .entity(typeRef);
+                        .content();
+                List<aiResponse> chunkNotes = parseAiResponse(raw);
 
                 if (chunkNotes != null) all.addAll(chunkNotes);
             }
@@ -186,6 +188,7 @@ public class AnnotationService {
               - quote
               - location
             - Do not include markdown, backticks, or code fences.
+            - Use standard JSON escaping only (\\n, \\t, \\\", \\\\). Do not escape hyphens.
             
             TEXT:
             """ + chunk;
@@ -196,7 +199,21 @@ public class AnnotationService {
         if(s == null) return null;
         s = s.replace("\\_", "_");
         s = s.replace("\\0", "\\u0000");
+        s = s.replace("\\-", "-");
 
         return s;
+    }
+
+    private static List<aiResponse> parseAiResponse(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return List.of();
+        }
+        String sanitized = sanitizeModelJson(raw);
+        try {
+            return OBJECT_MAPPER.readValue(sanitized, new TypeReference<List<aiResponse>>() {});
+        } catch (Exception e) {
+            LOG.warn("Failed to parse AI response; returning empty list. raw={}", raw, e);
+            return List.of();
+        }
     }
 }
