@@ -72,7 +72,7 @@ export function Navbar() {
                 type="button"
                 onClick={handleLogout}
                 variant="secondary"
-                className="border border-black bg-black text-slate-100 hover:bg-red-600 hover:border-red-500"
+                className="border border-black bg-black text-black-100 hover:bg-red-600 hover:border-red-500"
               >
                 Log out
               </Button>
